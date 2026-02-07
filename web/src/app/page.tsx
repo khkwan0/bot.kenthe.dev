@@ -53,6 +53,8 @@ export default function HomePage() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<{ role: MessageRole; content: string }[]>([])
   const [streamingContent, setStreamingContent] = useState('')
+  const [streamingThinking, setStreamingThinking] = useState('')
+  const [toolCallMessage, setToolCallMessage] = useState<string | null>(null)
   const [streamError, setStreamError] = useState<string | null>(null)
   const streamEndHandledRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -66,19 +68,38 @@ export default function HomePage() {
     scrollToBottom()
     const id = requestAnimationFrame(scrollToBottom)
     return () => cancelAnimationFrame(id)
-  }, [messages, streamingContent, scrollToBottom])
+  }, [messages, streamingContent, streamingThinking, toolCallMessage, scrollToBottom])
 
   useEffect(() => {
     if (!socket) return
     const onToken = (token: string) => {
       setStreamError(null)
+      setToolCallMessage(null)
       flushSync(() => {
         setStreamingContent((prev) => prev + token)
       })
       scrollToBottom()
       requestAnimationFrame(scrollToBottom)
     }
+    const onThinking = (thinking: string) => {
+      setStreamError(null)
+      setToolCallMessage(null)
+      flushSync(() => {
+        setStreamingThinking((prev) => prev + thinking)
+      })
+      scrollToBottom()
+      requestAnimationFrame(scrollToBottom)
+    }
+    const onToolCall = (tool: string) => {
+      setStreamError(null)
+      const message = tool === 'search_web' ? 'Searching the web...' : 'Calling a tool...'
+      setToolCallMessage(message)
+      scrollToBottom()
+      requestAnimationFrame(scrollToBottom)
+    }
     const onEnd = () => {
+      setStreamingThinking('')
+      setToolCallMessage(null)
       setStreamingContent((prev) => {
         if (prev && !streamEndHandledRef.current) {
           streamEndHandledRef.current = true
@@ -88,10 +109,14 @@ export default function HomePage() {
       })
     }
     const onStreamError = (msg: string) => setStreamError(msg)
+    socket.on('stream_thinking', onThinking)
+    socket.on('tool_call', onToolCall)
     socket.on('stream_token', onToken)
     socket.on('stream_end', onEnd)
     socket.on('stream_error', onStreamError)
     return () => {
+      socket.off('stream_thinking', onThinking)
+      socket.off('tool_call', onToolCall)
       socket.off('stream_token', onToken)
       socket.off('stream_end', onEnd)
       socket.off('stream_error', onStreamError)
@@ -100,12 +125,15 @@ export default function HomePage() {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    e.stopPropagation()
     const trimmed = input.trim()
     if (!trimmed) return
     streamEndHandledRef.current = false
     sendMessage(trimmed)
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }])
     setStreamingContent('')
+    setStreamingThinking('')
+    setToolCallMessage(null)
     setStreamError(null)
     setInput('')
   }
@@ -121,7 +149,7 @@ export default function HomePage() {
     }
   }
 
-  const hasConversation = messages.length > 0 || streamingContent || streamError
+  const hasConversation = messages.length > 0 || streamingContent || streamingThinking || toolCallMessage || streamError
   const canSubmit = isConnected && input.trim().length > 0
 
   return (
@@ -152,7 +180,7 @@ export default function HomePage() {
             Type @ for sources and / for shortcuts.
           </p>
 
-          <form onSubmit={handleSubmit} className="w-full mb-6">
+          <form action="#" onSubmit={handleSubmit} className="w-full mb-6">
             <div className="relative flex items-center rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[var(--accent)]/30 focus-within:border-[var(--accent)]/50 transition-shadow">
               <textarea
                 value={input}
@@ -222,6 +250,24 @@ export default function HomePage() {
                   </div>
                 </div>
               ))}
+              {streamingThinking && (
+                <div className="flex justify-start">
+                  <div className="max-w-full rounded-2xl rounded-bl-md px-4 py-3 bg-[var(--input-bg)]/60 border border-[var(--border)] text-[var(--muted)] text-sm prose prose-sm max-w-none dark:prose-invert [&_*]:text-[var(--muted)]">
+                    <span className="font-medium mb-1 block">Thinking</span>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {streamingThinking}
+                    </ReactMarkdown>
+                    <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--muted)] animate-pulse align-middle" aria-hidden />
+                  </div>
+                </div>
+              )}
+              {toolCallMessage && (
+                <div className="flex justify-start">
+                  <p className="text-[var(--muted)] text-sm italic" aria-live="polite">
+                    {toolCallMessage}
+                  </p>
+                </div>
+              )}
               {streamingContent && (
                 <div className="flex justify-start">
                   <div className="max-w-full rounded-2xl rounded-bl-md px-4 py-3 bg-[var(--input-bg)] border border-[var(--border)] text-[var(--foreground)] text-sm prose prose-sm max-w-none dark:prose-invert">
@@ -242,7 +288,7 @@ export default function HomePage() {
 
           {/* Sticky input */}
           <div className="shrink-0 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3">
-            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+            <form action="#" onSubmit={handleSubmit} className="max-w-3xl mx-auto">
               <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--input-bg)] px-4 py-2.5 focus-within:ring-2 focus-within:ring-[var(--accent)]/30 focus-within:border-[var(--accent)]/50 transition-shadow">
                 <textarea
                   value={input}

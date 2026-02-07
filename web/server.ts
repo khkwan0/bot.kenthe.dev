@@ -2,7 +2,7 @@ import {createServer} from 'http'
 import next from 'next'
 import {Server as SocketIOServer} from 'socket.io'
 import {logger} from './src/app/lib/logger'
-import {handleAIStreaming} from '@/lib/ai'
+import {handleAIStreaming, handleAI} from '@/lib/ai'
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = process.env.HOSTNAME ?? '0.0.0.0'
@@ -33,6 +33,7 @@ app.prepare().then(() => {
       const text = typeof message === 'string' ? message : String(message)
       logger.info({ text }, 'Received message')
       handleAIStreaming(socket, text)
+      // handleAI(text)
     })
 
     socket.on('disconnect', () => {
