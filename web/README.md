@@ -1,5 +1,38 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Web Search (RAG, Perplexity-style)
+
+To get up-to-date answers with web search and citations:
+
+1. Get a free API key at [Tavily](https://app.tavily.com).
+2. Set `TAVILY_API_KEY` in your environment (e.g. in `.env` or `.env.local`).
+
+When `TAVILY_API_KEY` is set, every user question triggers a web search; the top results are injected as context into the LLM (Ollama). The model is instructed to cite sources as [1], [2], … and list them at the end. No code changes are needed—just set the env var.
+
+Optional: `OLLAMA_HOST` – Ollama server URL (default: `http://vr.local.net:11434`).
+
+### Tavily MCP in Cursor
+
+To use Tavily from Cursor (e.g. so the AI can search the web while you code), add Tavily’s remote MCP server:
+
+1. **Cursor Settings → MCP** (or create `.cursor/mcp.json` in the project root).
+2. Add a server with URL:  
+   `https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_TAVILY_API_KEY`  
+   Replace `YOUR_TAVILY_API_KEY` with your key (the same value as `TAVILY_API_KEY` in `.env`). Do not commit the key.
+3. Restart Cursor if needed.
+
+Example `.cursor/mcp.json` (keep this file out of version control if it contains your key, or use a placeholder and fill it locally):
+
+```json
+{
+  "mcpServers": {
+    "tavily": {
+      "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_TAVILY_API_KEY"
+    }
+  }
+}
+```
+
 ## Getting Started
 
 First, run the development server:

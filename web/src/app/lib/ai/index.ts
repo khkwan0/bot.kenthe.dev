@@ -1,5 +1,10 @@
 import { Ollama } from 'ollama'
 import type { Socket as ServerSocket } from 'socket.io'
+import {
+  isWebSearchEnabled,
+  searchWeb,
+  formatSearchContext,
+} from '@/lib/search/tavily'
 
 const ollamaHost =
   process.env.OLLAMA_HOST ?? 'http://vr.local.net:11434'
@@ -34,15 +39,37 @@ export async function handleAI(prompt: string) {
   }
 }
 
+const RAG_SYSTEM_PROMPT = `You are a helpful assistant with access to up-to-date web search results. Use the provided search context to answer accurately. Cite sources using [1], [2], etc. and list "Sources:" at the end with the same numbers and URLs. If the context does not contain relevant information, say so and answer from general knowledge.`
+
 /** Streams AI response tokens to the socket in real time via 'stream_token' and 'stream_end' events. */
 export async function handleAIStreaming(
   socket: ServerSocket,
   message: string,
 ): Promise<void> {
   try {
+    let messages: { role: 'system' | 'user'; content: string }[]
+
+    if (isWebSearchEnabled()) {
+      const searchResponse = await searchWeb(message)
+      if (searchResponse?.results?.length) {
+        const context = formatSearchContext(searchResponse)
+        messages = [
+          { role: 'system', content: RAG_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Search context:\n${context}\n\nUser question: ${message}`,
+          },
+        ]
+      } else {
+        messages = [{ role: 'user', content: message }]
+      }
+    } else {
+      messages = [{ role: 'user', content: message }]
+    }
+
     const stream = await ollama.chat({
       model: 'gemma3',
-      messages: [{ role: 'user', content: message }],
+      messages,
       stream: true,
     })
     for await (const chunk of stream) {
