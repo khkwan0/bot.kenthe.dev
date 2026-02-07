@@ -1,0 +1,10 @@
+services:
+  web:
+    restart: always
+    build: ./web
+    ports:
+      - 33112:3000
+    volumes:
+      - ./web:/usr/src/app
+    env_file:
+      - .env 
